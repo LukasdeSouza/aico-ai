@@ -1,0 +1,24 @@
+{
+  "name": "aico",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "bin": {
+    "aico": "./index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "enquirer": "^2.4.1",
+    "groq-sdk": "^0.37.0",
+    "husky": "^9.1.7",
+    "picocolors": "^1.1.1",
+    "simple-git": "^3.30.0"
+  }
+}
