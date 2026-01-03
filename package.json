@@ -1,6 +1,6 @@
 {
   "name": "aico-ai",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "main": "index.js",
   "bin": {
@@ -21,6 +21,14 @@
   ],
   "author": "Lucas Silva from CodeTech Software <projetos@codetechsoftware.com.br>",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LukasdeSouza/aico-ai.git"
+  },
+  "bugs": {
+    "url": "https://github.com/LukasdeSouza/aico-ai/issues"
+  },
+  "homepage": "https://github.com/LukasdeSouza/aico-ai#readme",
   "dependencies": {
     "dotenv": "^17.2.3",
     "enquirer": "^2.4.1",
