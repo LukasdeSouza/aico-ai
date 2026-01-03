@@ -13,16 +13,49 @@ import { execSync } from 'child_process';
 async function init() {
     console.log(pc.bold(pc.blue('Aico: Initializing...')));
 
-    const { apiKey } = await prompt({
-        type: 'input',
-        name: 'apiKey',
-        message: 'Enter your Groq API Key:'
+    const { provider } = await prompt({
+        type: 'select',
+        name: 'provider',
+        message: 'Which AI provider would you like to use?',
+        choices: [
+            { name: 'groq', message: 'Groq (Fast & Free tier)' },
+            { name: 'openai', message: 'OpenAI (GPT-4o, etc.)' },
+            { name: 'deepseek', message: 'DeepSeek (Powerful & Cheap)' },
+            { name: 'ollama', message: 'Ollama (Local & Private)' },
+            { name: 'gemini', message: 'Google Gemini' }
+        ]
     });
 
-    if (apiKey) {
-        saveGlobalConfig({ GROQ_API_KEY: apiKey });
-        console.log(pc.green('API Key saved globally in ~/.aicorc'));
+    let config = { provider, providers: {} };
+    config.providers[provider] = {};
+
+    if (provider === 'ollama') {
+        const { baseUrl } = await prompt({
+            type: 'input',
+            name: 'baseUrl',
+            message: 'Ollama Base URL:',
+            initial: 'http://localhost:11434'
+        });
+        config.providers[provider].baseUrl = baseUrl;
+    } else {
+        const { apiKey } = await prompt({
+            type: 'input',
+            name: 'apiKey',
+            message: `Enter your ${provider} API Key:`
+        });
+        config.providers[provider].apiKey = apiKey;
     }
+
+    const { model } = await prompt({
+        type: 'input',
+        name: 'model',
+        message: 'Model name (leave empty for default):',
+        initial: ''
+    });
+    if (model) config.providers[provider].model = model;
+
+    saveGlobalConfig(config);
+    console.log(pc.green(`\nConfiguration saved globally in ~/.aicorc for ${provider}!`));
 
     const { setupHusky } = await prompt({
         type: 'confirm',
@@ -46,14 +79,55 @@ async function init() {
     }
 }
 
+function displayHelp() {
+    console.log(`
+${pc.bold(pc.blue('Aico AI - Gatekeeper for your code'))}
+
+${pc.bold('Usage:')}
+  aico <command> [options]
+
+${pc.bold('Commands:')}
+  ${pc.cyan('review')}    Analyze staged changes and suggest improvements (default)
+  ${pc.cyan('commit')}    Generate and apply an AI-suggested commit message
+  ${pc.cyan('init')}      Setup AI providers and Git hooks
+  ${pc.cyan('help')}      Display this help message
+
+${pc.bold('Options:')}
+  ${pc.cyan('--silent, -s')}    Run review without blocking the push
+  ${pc.cyan('--version, -v')}   Display version number
+  ${pc.cyan('--help, -h')}      Display this help message
+
+${pc.bold('Examples:')}
+  aico review --silent
+  aico commit
+    `);
+}
+
 async function main() {
     const args = process.argv.slice(2);
     const command = args[0] || 'review';
     const isSilent = args.includes('--silent') || args.includes('-s');
 
+    if (args.includes('--help') || args.includes('-h') || command === 'help') {
+        displayHelp();
+        return;
+    }
+
+    if (args.includes('--version') || args.includes('-v')) {
+        const pkg = JSON.parse(fs.readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
+        console.log(`aico-ai v${pkg.version}`);
+        return;
+    }
+
     if (command === 'init') {
         await init();
         return;
+    }
+
+    if (command !== 'review' && command !== 'commit') {
+        console.error(pc.red(`Unknown command: ${command}`));
+        console.log(`Run ${pc.cyan('aico help')} to see available commands.`);
+        process.exit(1);
     }
 
     if (command === 'commit') {

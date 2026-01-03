@@ -1,6 +1,6 @@
 {
-  "name": "aico",
-  "version": "1.0.0",
+  "name": "aico-ai",
+  "version": "1.0.1",
   "type": "module",
   "main": "index.js",
   "bin": {
@@ -9,10 +9,18 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
+  "description": "AI-powered git gatekeeper for code reviews and commit message generation.",
+  "keywords": [
+    "ai",
+    "git",
+    "code-review",
+    "commit",
+    "groq",
+    "cli",
+    "developer-tools"
+  ],
+  "author": "Lucas Silva from CodeTech Software <projetos@codetechsoftware.com.br>",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "dotenv": "^17.2.3",
     "enquirer": "^2.4.1",
