@@ -17,7 +17,10 @@
     "commit",
     "groq",
     "cli",
-    "developer-tools"
+    "developer-tools",
+    "chatgpt",
+    "gemini",
+    "artificial-intelligence"
   ],
   "author": "Lucas Silva from CodeTech Software <projetos@codetechsoftware.com.br>",
   "license": "ISC",
