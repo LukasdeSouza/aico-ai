@@ -1,6 +1,6 @@
 {
   "name": "aico-ai",
-  "version": "1.0.2",
+  "version": "1.0.24",
   "type": "module",
   "main": "index.js",
   "bin": {
