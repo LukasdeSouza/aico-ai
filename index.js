@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { getStagedDiff, applyFix } from './lib/git-utils.js';
+import { getStagedDiff, applyFix, getDiffChunks } from './lib/git-utils.js';
 import { reviewCode, generateCommitMessage } from './lib/ai-service.js';
 import { parseAIResponse, displayIssues } from './lib/reviewer.js';
 import pc from 'picocolors';
@@ -9,6 +9,28 @@ const { prompt } = enquirer;
 
 import { saveGlobalConfig } from './lib/config-utils.js';
 import { execSync } from 'child_process';
+
+// Spinner utility
+let spinnerInterval;
+const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+let frameIndex = 0;
+
+function startSpinner(text) {
+    frameIndex = 0;
+    process.stdout.write('\x1B[?25l'); // Hide cursor
+    spinnerInterval = setInterval(() => {
+        process.stdout.write(`\r${pc.cyan(spinnerFrames[frameIndex++ % spinnerFrames.length])} ${text}`);
+    }, 80);
+}
+
+function stopSpinner() {
+    if (spinnerInterval) {
+        clearInterval(spinnerInterval);
+        spinnerInterval = null;
+        process.stdout.write('\r\x1b[K'); // Clear line
+        process.stdout.write('\x1B[?25h'); // Show cursor
+    }
+}
 
 async function init() {
     console.log(pc.bold(pc.blue('Aico: Initializing...')));
@@ -46,10 +68,18 @@ async function init() {
         config.providers[provider].apiKey = apiKey;
     }
 
+    const defaultModels = {
+        groq: 'llama-3.3-70b-versatile',
+        openai: 'gpt-4o-mini',
+        deepseek: 'deepseek-chat',
+        ollama: 'llama3',
+        gemini: 'gemini-1.5-flash'
+    };
+
     const { model } = await prompt({
         type: 'input',
         name: 'model',
-        message: 'Model name (leave empty for default):',
+        message: `Model name (default: ${defaultModels[provider]}):`,
         initial: ''
     });
     if (model) config.providers[provider].model = model;
@@ -68,9 +98,16 @@ async function init() {
         try {
             console.log(pc.blue('Setting up Husky...'));
             execSync('npx husky init', { stdio: 'inherit' });
+
+            // Remove the default pre-commit hook that runs "npm test"
+            const preCommitPath = '.husky/pre-commit';
+            if (fs.existsSync(preCommitPath)) {
+                fs.unlinkSync(preCommitPath);
+            }
+
             // Add aico to pre-push
             const huskyPath = '.husky/pre-push';
-            const hookContent = '#!/bin/sh\nnpx aico review\n';
+            const hookContent = '#!/bin/sh\naico review\n';
             fs.writeFileSync(huskyPath, hookContent, { mode: 0o755 });
             console.log(pc.green('Husky pre-push hook configured!'));
         } catch (e) {
@@ -131,7 +168,6 @@ async function main() {
     }
 
     if (command === 'commit') {
-        console.log(pc.bold(pc.blue('Aico: Generating commit message...')));
         try {
             const diff = await getStagedDiff();
             if (!diff || diff.trim() === '') {
@@ -139,10 +175,15 @@ async function main() {
                 return;
             }
 
-            let message = await generateCommitMessage(diff);
+            // For commit messages, we use a truncated diff if it's too large to save tokens
+            const commitDiff = diff.length > 20000 ? diff.substring(0, 20000) + '\n... [Diff truncated for summary] ...' : diff;
+
+            startSpinner('Generating commit message...');
+            let message = await generateCommitMessage(commitDiff);
+            stopSpinner();
 
             while (true) {
-                console.log(`\n${pc.bold('Suggested message:')} ${pc.green(message)}`);
+                console.log(`${pc.bold('Suggested message:')} ${pc.green(message)}`);
 
                 const { action } = await prompt({
                     type: 'select',
@@ -170,13 +211,14 @@ async function main() {
                     message = newMessage;
                 } else if (action === 'regenerate') {
                     console.log(pc.blue('Regenerating...'));
-                    message = await generateCommitMessage(diff);
+                    message = await generateCommitMessage(commitDiff);
                 } else {
                     console.log(pc.red('Commit aborted.'));
                     return;
                 }
             }
         } catch (error) {
+            stopSpinner();
             console.error(pc.red('Error during commit:'), error.message);
             process.exit(1);
         }
@@ -185,22 +227,78 @@ async function main() {
     console.log(pc.bold(pc.blue('Aico: Analyzing your changes...')));
 
     try {
-        const diff = await getStagedDiff();
+        const fullDiff = await getStagedDiff();
 
-        if (!diff || diff.trim() === '') {
+        if (!fullDiff || fullDiff.trim() === '') {
             console.log(pc.yellow('No staged changes found to review.'));
             return;
         }
 
-        const aiResponse = await reviewCode(diff);
-        const issues = parseAIResponse(aiResponse);
+        let chunks = getDiffChunks(fullDiff);
 
-        if (issues.length === 0) {
+        // Handle exceptionally large diffs interactively
+        if (chunks.length > 5 && !isSilent) {
+            console.log(pc.yellow(`\nWarning: Giant diff detected (${chunks.length} chunks).`));
+            const { strategy } = await prompt({
+                type: 'select',
+                name: 'strategy',
+                message: 'How would you like to proceed?',
+                choices: [
+                    { name: 'all', message: `Review everything (Parallel, ~${chunks.length * 2}s)`, value: 'all' },
+                    { name: 'top', message: 'Review only the first 5 chunks (Faster)', value: 'top' },
+                    { name: 'skip', message: 'Skip review and proceed', value: 'skip' }
+                ]
+            });
+
+            if (strategy === 'skip') {
+                console.log(pc.green('Skipping review. Proceeding with push...'));
+                return;
+            } else if (strategy === 'top') {
+                chunks = chunks.slice(0, 5);
+            }
+        }
+
+        const allIssues = [];
+        const CONCURRENCY_LIMIT = 3;
+
+        // Process chunks in parallel with a concurrency limit
+        for (let i = 0; i < chunks.length; i += CONCURRENCY_LIMIT) {
+            const currentBatch = chunks.slice(i, i + CONCURRENCY_LIMIT);
+            const batchIndex = Math.floor(i / CONCURRENCY_LIMIT) + 1;
+            const totalBatches = Math.ceil(chunks.length / CONCURRENCY_LIMIT);
+
+            const statusText = chunks.length > 1
+                ? `Analyzing changes (Batch ${batchIndex}/${totalBatches})...`
+                : 'Analyzing your changes...';
+
+            startSpinner(statusText);
+
+            try {
+                const batchResults = await Promise.all(currentBatch.map(chunk => reviewCode(chunk)));
+                stopSpinner();
+
+                for (const aiResponse of batchResults) {
+                    const chunkIssues = parseAIResponse(aiResponse);
+                    allIssues.push(...chunkIssues);
+                }
+
+                // Small delay between batches to avoid rate limits
+                if (i + CONCURRENCY_LIMIT < chunks.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+            } catch (error) {
+                stopSpinner();
+                console.error(pc.red(`\nError during batch ${batchIndex} review:`), error.message);
+                if (chunks.length <= CONCURRENCY_LIMIT) throw error;
+            }
+        }
+
+        if (allIssues.length === 0) {
             console.log(pc.green('No issues found. Good job!'));
         } else {
-            displayIssues(issues);
+            displayIssues(allIssues);
 
-            for (const issue of issues) {
+            for (const issue of allIssues) {
                 console.log(pc.cyan(`\nReviewing issue in ${pc.bold(issue.file)}...`));
                 console.log(`${pc.yellow('Issue:')} ${issue.issue}`);
 
@@ -239,20 +337,21 @@ async function main() {
             const finalAction = await prompt({
                 type: 'confirm',
                 name: 'proceed',
-                message: 'Would you like to proceed with the push?',
+                message: 'Would you like to proceed?',
                 initial: true
             });
 
             if (!finalAction.proceed) {
-                console.log(pc.red('Push aborted.'));
+                console.log(pc.red('Aborted.'));
                 process.exit(1);
             }
-        } else if (issues.length > 0) {
+        } else if (allIssues.length > 0) {
             console.log(pc.yellow('\nReview completed with issues, but proceeding anyway (Silent Mode).'));
         }
 
-        console.log(pc.green('Proceeding with push...'));
+        console.log(pc.green('Done!'));
     } catch (error) {
+        stopSpinner();
         console.error(pc.red('Error during review:'), error.message);
         process.exit(1);
     }
