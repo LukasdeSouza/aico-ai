@@ -1,0 +1,74 @@
+name: Aico Code Review
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-review:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install Aico AI
+        run: npm install -g aico-ai
+      
+      - name: Run Aico Review
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: |
+          git add -A
+          aico ci --format json --output aico-report.json --fail-on-error
+      
+      - name: Upload Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: aico-report
+          path: aico-report.json
+      
+      - name: Comment PR
+        if: github.event_name == 'pull_request' && failure()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync('aico-report.json', 'utf8'));
+            const { summary, issues } = report;
+            
+            let comment = `## 🤖 Aico Code Review\n\n`;
+            comment += `**Summary:** ${summary.totalIssues} issue(s) found\n`;
+            comment += `- ❌ Errors: ${summary.errors}\n`;
+            comment += `- ⚠️ Warnings: ${summary.warnings}\n`;
+            comment += `- ℹ️ Info: ${summary.info}\n\n`;
+            
+            if (issues.length > 0) {
+              comment += `### Issues:\n\n`;
+              issues.slice(0, 10).forEach(issue => {
+                const icon = issue.severity === 'error' ? '❌' : '⚠️';
+                comment += `${icon} **${issue.file}** (line ${issue.line || 'N/A'})\n`;
+                comment += `${issue.message}\n\n`;
+              });
+              
+              if (issues.length > 10) {
+                comment += `\n_... and ${issues.length - 10} more issue(s). See full report in artifacts._\n`;
+              }
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

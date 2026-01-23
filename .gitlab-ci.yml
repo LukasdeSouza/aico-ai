@@ -1,0 +1,57 @@
+# Aico AI Code Review - GitLab CI Template
+
+stages:
+  - code-quality
+
+aico-review:
+  stage: code-quality
+  image: node:18
+  
+  before_script:
+    - npm install -g aico-ai
+  
+  script:
+    - git add -A
+    - aico ci --format json --output aico-report.json --fail-on-error
+  
+  artifacts:
+    when: always
+    paths:
+      - aico-report.json
+    reports:
+      junit: aico-report.xml
+    expire_in: 30 days
+  
+  only:
+    - merge_requests
+    - main
+    - develop
+  
+  variables:
+    GROQ_API_KEY: $GROQ_API_KEY
+
+# Optional: Run with XML format for GitLab integration
+aico-review-xml:
+  stage: code-quality
+  image: node:18
+  
+  before_script:
+    - npm install -g aico-ai
+  
+  script:
+    - git add -A
+    - aico ci --format xml --output aico-report.xml --fail-on-warn
+  
+  artifacts:
+    when: always
+    reports:
+      junit: aico-report.xml
+    expire_in: 30 days
+  
+  only:
+    - merge_requests
+  
+  variables:
+    GROQ_API_KEY: $GROQ_API_KEY
+  
+  allow_failure: true

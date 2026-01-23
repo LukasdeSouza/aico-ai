@@ -2,6 +2,31 @@
 import { getStagedDiff, applyFix, getDiffChunks } from './lib/git-utils.js';
 import { reviewCode, generateCommitMessage } from './lib/ai-service.js';
 import { parseAIResponse, displayIssues } from './lib/reviewer.js';
+import { 
+    initializeTeamRules, 
+    loadTeamRules, 
+    validateAgainstRules, 
+    displayViolations,
+    listRules,
+    generateEnhancedPrompt
+} from './lib/rules-engine.js';
+import {
+    formatJSON,
+    formatXML,
+    formatGitHubActions,
+    formatText,
+    saveToFile,
+    getExitCode,
+    filterBySeverity
+} from './lib/ci-formatter.js';
+import {
+    scanDependencies,
+    scanCode,
+    scanConfiguration,
+    displaySecurityResults,
+    generateSecurityReport,
+    detectPackageManager
+} from './lib/security-scanner.js';
 import pc from 'picocolors';
 import enquirer from 'enquirer';
 import fs from 'fs';
@@ -9,6 +34,7 @@ const { prompt } = enquirer;
 
 import { saveGlobalConfig } from './lib/config-utils.js';
 import { execSync } from 'child_process';
+import { getActiveProvider } from './lib/config-utils.js';
 
 // Spinner utility
 let spinnerInterval;
@@ -33,18 +59,28 @@ function stopSpinner() {
 }
 
 async function init() {
-    console.log(pc.bold(pc.blue('Aico: Initializing...')));
+    console.log(pc.bold(pc.blue('\n🚀 Welcome to Aico AI - Your Code Quality Gatekeeper!\n')));
+    console.log(pc.dim('This wizard will help you set up Aico in a few simple steps.\n'));
+
+    // Provider selection with helpful links
+    const providerLinks = {
+        groq: 'https://console.groq.com/keys',
+        openai: 'https://platform.openai.com/api-keys',
+        deepseek: 'https://platform.deepseek.com/api_keys',
+        gemini: 'https://makersuite.google.com/app/apikey',
+        ollama: 'https://ollama.ai'
+    };
 
     const { provider } = await prompt({
         type: 'select',
         name: 'provider',
         message: 'Which AI provider would you like to use?',
         choices: [
-            { name: 'groq', message: 'Groq (Fast & Free tier)' },
-            { name: 'openai', message: 'OpenAI (GPT-4o, etc.)' },
-            { name: 'deepseek', message: 'DeepSeek (Powerful & Cheap)' },
-            { name: 'ollama', message: 'Ollama (Local & Private)' },
-            { name: 'gemini', message: 'Google Gemini' }
+            { name: 'groq', message: 'Groq (Fast & Free tier) - Recommended for getting started' },
+            { name: 'openai', message: 'OpenAI (GPT-4o, etc.) - High quality, paid' },
+            { name: 'deepseek', message: 'DeepSeek (Powerful & Cheap) - Great value' },
+            { name: 'ollama', message: 'Ollama (Local & Private) - Complete privacy' },
+            { name: 'gemini', message: 'Google Gemini - Free tier available' }
         ]
     });
 
@@ -52,6 +88,9 @@ async function init() {
     config.providers[provider] = {};
 
     if (provider === 'ollama') {
+        console.log(pc.dim(`\n💡 Tip: Make sure Ollama is running locally first!`));
+        console.log(pc.dim(`   Install: https://ollama.ai\n`));
+        
         const { baseUrl } = await prompt({
             type: 'input',
             name: 'baseUrl',
@@ -60,10 +99,18 @@ async function init() {
         });
         config.providers[provider].baseUrl = baseUrl;
     } else {
+        console.log(pc.dim(`\n💡 Get your API key: ${pc.cyan(providerLinks[provider])}\n`));
+        
         const { apiKey } = await prompt({
-            type: 'input',
+            type: 'password',
             name: 'apiKey',
-            message: `Enter your ${provider} API Key:`
+            message: `Enter your ${provider} API Key:`,
+            validate: (value) => {
+                if (!value || value.trim() === '') {
+                    return 'API Key is required';
+                }
+                return true;
+            }
         });
         config.providers[provider].apiKey = apiKey;
     }
@@ -76,17 +123,25 @@ async function init() {
         gemini: 'gemini-1.5-flash'
     };
 
+    console.log(pc.dim(`\n💡 Default model: ${defaultModels[provider]}`));
+    console.log(pc.dim(`   Press Enter to use default, or type a different model name.\n`));
+
     const { model } = await prompt({
         type: 'input',
         name: 'model',
-        message: `Model name (default: ${defaultModels[provider]}):`,
-        initial: ''
+        message: `Model name:`,
+        initial: defaultModels[provider]
     });
-    if (model) config.providers[provider].model = model;
+    
+    if (model && model !== defaultModels[provider]) {
+        config.providers[provider].model = model;
+    }
 
     saveGlobalConfig(config);
-    console.log(pc.green(`\nConfiguration saved globally in ~/.aicorc for ${provider}!`));
+    console.log(pc.green(`\n✓ Configuration saved globally in ~/.aicorc for ${provider}!`));
 
+    // Git hooks setup
+    console.log(pc.dim('\n💡 Git hooks allow Aico to automatically review your code before pushing.'));
     const { setupHusky } = await prompt({
         type: 'confirm',
         name: 'setupHusky',
@@ -96,7 +151,7 @@ async function init() {
 
     if (setupHusky) {
         try {
-            console.log(pc.blue('Setting up Husky...'));
+            console.log(pc.blue('\n⚙️  Setting up Husky...'));
             execSync('npx husky init', { stdio: 'inherit' });
 
             // Remove the default pre-commit hook that runs "npm test"
@@ -109,10 +164,544 @@ async function init() {
             const huskyPath = '.husky/pre-push';
             const hookContent = '#!/bin/sh\naico review\n';
             fs.writeFileSync(huskyPath, hookContent, { mode: 0o755 });
-            console.log(pc.green('Husky pre-push hook configured!'));
+            console.log(pc.green('✓ Husky pre-push hook configured!'));
         } catch (e) {
-            console.error(pc.red('Failed to setup Husky:'), e.message);
+            console.error(pc.red('✗ Failed to setup Husky:'), e.message);
+            console.log(pc.yellow('\n⚠️  You can set up hooks manually later with: npx husky init'));
         }
+    }
+
+    // Success message with next steps
+    console.log(pc.bold(pc.green('\n🎉 Aico is ready to use!\n')));
+    console.log(pc.bold('📚 Next Steps:\n'));
+    console.log(`  ${pc.cyan('1.')} Set up team rules (recommended):`);
+    console.log(`     ${pc.dim('aico rules init')}\n`);
+    console.log(`  ${pc.cyan('2.')} Review your code:`);
+    console.log(`     ${pc.dim('git add .')}`);
+    console.log(`     ${pc.dim('aico review')}\n`);
+    console.log(`  ${pc.cyan('3.')} Run a security scan:`);
+    console.log(`     ${pc.dim('aico security scan')}\n`);
+    console.log(`  ${pc.cyan('4.')} Generate AI commit messages:`);
+    console.log(`     ${pc.dim('git add .')}`);
+    console.log(`     ${pc.dim('aico commit')}\n`);
+    console.log(pc.dim('💡 Run "aico help" to see all available commands.\n'));
+}
+
+async function handleRulesCommand(subcommand) {
+    if (!subcommand || subcommand === 'init') {
+        // Initialize team rules
+        const result = initializeTeamRules();
+        
+        if (result.exists) {
+            console.log(pc.yellow(`Team rules already exist at ${result.path}`));
+            const { overwrite } = await prompt({
+                type: 'confirm',
+                name: 'overwrite',
+                message: 'Would you like to overwrite with the default template?',
+                initial: false
+            });
+            
+            if (overwrite) {
+                fs.unlinkSync(result.path);
+                const newResult = initializeTeamRules();
+                if (newResult.created) {
+                    console.log(pc.green(`✓ Team rules initialized at ${newResult.path}`));
+                    console.log(pc.blue('\nEdit this file to customize your team\'s code quality standards.'));
+                }
+            }
+        } else if (result.created) {
+            console.log(pc.green(`✓ Team rules initialized at ${result.path}`));
+            console.log(pc.blue('\nEdit this file to customize your team\'s code quality standards.'));
+            console.log(pc.dim('\nExample rules include:'));
+            console.log(pc.dim('  - Naming conventions (camelCase, PascalCase, etc.)'));
+            console.log(pc.dim('  - Complexity limits (max function length, nesting depth)'));
+            console.log(pc.dim('  - Forbidden patterns (console.log, debugger, TODO)'));
+            console.log(pc.dim('  - Security checks (hardcoded secrets, eval usage)'));
+        }
+        return;
+    }
+
+    if (subcommand === 'list') {
+        // List all active rules
+        const result = listRules();
+        
+        if (!result) {
+            console.log(pc.yellow('No team rules found. Run "aico rules init" to create them.'));
+            return;
+        }
+
+        const { rules, summary } = result;
+        
+        console.log(pc.bold(pc.blue('\n📋 Team Rules Configuration\n')));
+        console.log(`${pc.bold('Version:')} ${summary.version}`);
+        console.log(`${pc.bold('Description:')} ${summary.description}`);
+        console.log(`${pc.bold('Total Rules:')} ${summary.totalRules}\n`);
+
+        console.log(pc.bold('Categories:'));
+        for (const [category, count] of Object.entries(summary.categories)) {
+            console.log(`  ${pc.cyan('•')} ${category}: ${count} rule(s)`);
+        }
+
+        console.log(pc.bold('\n🚫 Forbidden Patterns:'));
+        if (rules.rules.forbidden && rules.rules.forbidden.length > 0) {
+            for (const rule of rules.rules.forbidden) {
+                const icon = rule.severity === 'error' ? '❌' : '⚠️';
+                console.log(`  ${icon} ${rule.pattern}`);
+                console.log(`     ${pc.dim(rule.message)}`);
+            }
+        } else {
+            console.log(pc.dim('  None configured'));
+        }
+
+        console.log(pc.bold('\n📏 Complexity Limits:'));
+        if (rules.rules.complexity) {
+            for (const [rule, value] of Object.entries(rules.rules.complexity)) {
+                console.log(`  ${pc.cyan('•')} ${rule}: ${value}`);
+            }
+        } else {
+            console.log(pc.dim('  None configured'));
+        }
+
+        console.log(pc.bold('\n🛡️  Security Rules:'));
+        if (rules.rules.security) {
+            for (const [rule, enabled] of Object.entries(rules.rules.security)) {
+                if (enabled) {
+                    console.log(`  ${pc.green('✓')} ${rule}`);
+                }
+            }
+        } else {
+            console.log(pc.dim('  None configured'));
+        }
+
+        console.log('');
+        return;
+    }
+
+    if (subcommand === 'validate') {
+        // Validate current changes against team rules
+        console.log(pc.bold(pc.blue('Validating against team rules...\n')));
+
+        const rules = loadTeamRules();
+        if (!rules) {
+            console.log(pc.yellow('No team rules found. Run "aico rules init" to create them.'));
+            return;
+        }
+
+        const diff = await getStagedDiff();
+        if (!diff || diff.trim() === '') {
+            console.log(pc.yellow('No staged changes found to validate.'));
+            return;
+        }
+
+        // Parse diff to get file contents
+        const files = diff.split(/^diff --git /m).filter(Boolean);
+        let allViolations = [];
+
+        for (const fileDiff of files) {
+            // Extract file path
+            const pathMatch = fileDiff.match(/a\/(.*?) b\//);
+            if (!pathMatch) continue;
+            
+            const filePath = pathMatch[1];
+            
+            // Try to read the actual file content
+            try {
+                if (fs.existsSync(filePath)) {
+                    const fileContent = fs.readFileSync(filePath, 'utf-8');
+                    const violations = validateAgainstRules(fileDiff, fileContent, filePath);
+                    allViolations.push(...violations);
+                }
+            } catch (error) {
+                // Skip files that can't be read
+                continue;
+            }
+        }
+
+        displayViolations(allViolations);
+
+        if (allViolations.length > 0) {
+            const errorCount = allViolations.filter(v => v.severity === 'error').length;
+            const warnCount = allViolations.filter(v => v.severity === 'warn').length;
+            
+            console.log(pc.bold(`Summary: ${errorCount} error(s), ${warnCount} warning(s)\n`));
+            
+            if (errorCount > 0) {
+                process.exit(1);
+            }
+        }
+        return;
+    }
+
+    console.error(pc.red(`Unknown rules subcommand: ${subcommand}`));
+    console.log(`Run ${pc.cyan('aico help')} to see available commands.`);
+    process.exit(1);
+}
+
+async function handleSecurityCommand(subcommand, args) {
+    if (!subcommand || subcommand === 'scan') {
+        // Full security scan
+        console.log(pc.bold(pc.blue('🛡️  Running security scan...\n')));
+        
+        startSpinner('Scanning dependencies...');
+        const dependencies = scanDependencies();
+        stopSpinner();
+        
+        startSpinner('Scanning code...');
+        const codeIssues = [];
+        const configIssues = scanConfiguration();
+        
+        // Scan all JavaScript/TypeScript files
+        const extensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'];
+        const scanFiles = (dir) => {
+            if (!fs.existsSync(dir)) return;
+            const files = fs.readdirSync(dir);
+            
+            for (const file of files) {
+                const filePath = `${dir}/${file}`;
+                const stat = fs.statSync(filePath);
+                
+                if (stat.isDirectory()) {
+                    // Skip node_modules, dist, build, etc.
+                    if (!['node_modules', 'dist', 'build', '.git', '.next', 'coverage'].includes(file)) {
+                        scanFiles(filePath);
+                    }
+                } else if (extensions.some(ext => file.endsWith(ext))) {
+                    try {
+                        const content = fs.readFileSync(filePath, 'utf-8');
+                        const issues = scanCode(content, filePath);
+                        codeIssues.push(...issues);
+                    } catch (error) {
+                        // Skip files that can't be read
+                    }
+                }
+            }
+        };
+        
+        scanFiles('.');
+        stopSpinner();
+        
+        // Prepare results
+        const results = {
+            dependencies,
+            code: codeIssues,
+            configuration: configIssues,
+            summary: {
+                total: dependencies.vulnerabilities.length + codeIssues.length + configIssues.length,
+                critical: dependencies.summary.critical + codeIssues.filter(i => i.severity === 'critical').length + configIssues.filter(i => i.severity === 'critical').length,
+                high: dependencies.summary.high + codeIssues.filter(i => i.severity === 'high').length + configIssues.filter(i => i.severity === 'high').length,
+                moderate: dependencies.summary.moderate + codeIssues.filter(i => i.severity === 'moderate').length + configIssues.filter(i => i.severity === 'moderate').length,
+                low: dependencies.summary.low + codeIssues.filter(i => i.severity === 'low').length + configIssues.filter(i => i.severity === 'low').length
+            }
+        };
+        
+        // Display results
+        displaySecurityResults(results);
+        
+        // Save report if requested
+        if (args.includes('--output')) {
+            const outputIndex = args.indexOf('--output');
+            const outputFile = args[outputIndex + 1];
+            const report = generateSecurityReport(results);
+            saveToFile(JSON.stringify(report, null, 2), outputFile);
+            console.log(pc.green(`Report saved to ${outputFile}`));
+        }
+        
+        // Exit with error code if critical or high severity issues found
+        if (results.summary.critical > 0 || results.summary.high > 0) {
+            process.exit(1);
+        }
+        
+        return;
+    }
+    
+    if (subcommand === 'check') {
+        const checkType = args.includes('--dependencies') ? 'dependencies' : 
+                         args.includes('--code') ? 'code' : 'all';
+        
+        if (checkType === 'dependencies' || checkType === 'all') {
+            console.log(pc.bold(pc.blue('Checking dependencies...\n')));
+            const dependencies = scanDependencies();
+            
+            if (dependencies.vulnerabilities.length === 0) {
+                console.log(pc.green('✓ No dependency vulnerabilities found'));
+            } else {
+                displaySecurityResults({ dependencies, summary: dependencies.summary });
+            }
+        }
+        
+        if (checkType === 'code' || checkType === 'all') {
+            console.log(pc.bold(pc.blue('\nChecking code...\n')));
+            // Similar to scan but only code
+            const codeIssues = [];
+            const extensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'];
+            
+            const scanFiles = (dir) => {
+                if (!fs.existsSync(dir)) return;
+                const files = fs.readdirSync(dir);
+                
+                for (const file of files) {
+                    const filePath = `${dir}/${file}`;
+                    const stat = fs.statSync(filePath);
+                    
+                    if (stat.isDirectory()) {
+                        if (!['node_modules', 'dist', 'build', '.git'].includes(file)) {
+                            scanFiles(filePath);
+                        }
+                    } else if (extensions.some(ext => file.endsWith(ext))) {
+                        try {
+                            const content = fs.readFileSync(filePath, 'utf-8');
+                            const issues = scanCode(content, filePath);
+                            codeIssues.push(...issues);
+                        } catch (error) {
+                            // Skip
+                        }
+                    }
+                }
+            };
+            
+            scanFiles('.');
+            
+            if (codeIssues.length === 0) {
+                console.log(pc.green('✓ No code vulnerabilities found'));
+            } else {
+                const summary = {
+                    total: codeIssues.length,
+                    critical: codeIssues.filter(i => i.severity === 'critical').length,
+                    high: codeIssues.filter(i => i.severity === 'high').length,
+                    moderate: codeIssues.filter(i => i.severity === 'moderate').length,
+                    low: codeIssues.filter(i => i.severity === 'low').length
+                };
+                displaySecurityResults({ code: codeIssues, summary });
+            }
+        }
+        
+        return;
+    }
+    
+    if (subcommand === 'report') {
+        // Generate detailed security report
+        console.log(pc.bold(pc.blue('Generating security report...\n')));
+        
+        const dependencies = scanDependencies();
+        const codeIssues = [];
+        const configIssues = scanConfiguration();
+        
+        // Scan code
+        const extensions = ['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs'];
+        const scanFiles = (dir) => {
+            if (!fs.existsSync(dir)) return;
+            const files = fs.readdirSync(dir);
+            
+            for (const file of files) {
+                const filePath = `${dir}/${file}`;
+                const stat = fs.statSync(filePath);
+                
+                if (stat.isDirectory()) {
+                    if (!['node_modules', 'dist', 'build', '.git'].includes(file)) {
+                        scanFiles(filePath);
+                    }
+                } else if (extensions.some(ext => file.endsWith(ext))) {
+                    try {
+                        const content = fs.readFileSync(filePath, 'utf-8');
+                        const issues = scanCode(content, filePath);
+                        codeIssues.push(...issues);
+                    } catch (error) {
+                        // Skip
+                    }
+                }
+            }
+        };
+        
+        scanFiles('.');
+        
+        const results = {
+            dependencies,
+            code: codeIssues,
+            configuration: configIssues,
+            summary: {
+                total: dependencies.vulnerabilities.length + codeIssues.length + configIssues.length,
+                critical: dependencies.summary.critical + codeIssues.filter(i => i.severity === 'critical').length,
+                high: dependencies.summary.high + codeIssues.filter(i => i.severity === 'high').length,
+                moderate: dependencies.summary.moderate + codeIssues.filter(i => i.severity === 'moderate').length,
+                low: dependencies.summary.low + codeIssues.filter(i => i.severity === 'low').length
+            }
+        };
+        
+        const report = generateSecurityReport(results);
+        const outputFile = 'security-report.json';
+        saveToFile(JSON.stringify(report, null, 2), outputFile);
+        
+        console.log(pc.green(`✓ Security report generated: ${outputFile}`));
+        console.log(pc.dim(`\nSummary: ${results.summary.total} issues found`));
+        console.log(pc.dim(`  Critical: ${results.summary.critical}`));
+        console.log(pc.dim(`  High: ${results.summary.high}`));
+        console.log(pc.dim(`  Moderate: ${results.summary.moderate}`));
+        console.log(pc.dim(`  Low: ${results.summary.low}`));
+        
+        return;
+    }
+    
+    console.error(pc.red(`Unknown security subcommand: ${subcommand}`));
+    console.log(`Run ${pc.cyan('aico help')} to see available commands.`);
+    process.exit(1);
+}
+
+async function handleCICommand(args) {
+    // Parse CI-specific options
+    const format = args.find(arg => arg.startsWith('--format='))?.split('=')[1] || 
+                   (args.includes('--format') ? args[args.indexOf('--format') + 1] : 'text');
+    const output = args.find(arg => arg.startsWith('--output='))?.split('=')[1] ||
+                   (args.includes('--output') ? args[args.indexOf('--output') + 1] : null);
+    const failOnError = args.includes('--fail-on-error');
+    const failOnWarn = args.includes('--fail-on-warn');
+    const severity = args.find(arg => arg.startsWith('--severity='))?.split('=')[1] ||
+                     (args.includes('--severity') ? args[args.indexOf('--severity') + 1] : null);
+
+    const startTime = Date.now();
+
+    try {
+        // Get staged diff
+        const fullDiff = await getStagedDiff();
+
+        if (!fullDiff || fullDiff.trim() === '') {
+            const emptyResult = {
+                summary: { totalIssues: 0, errors: 0, warnings: 0, info: 0 },
+                issues: [],
+                metadata: {
+                    timestamp: new Date().toISOString(),
+                    duration: 0,
+                    provider: null,
+                    model: null
+                }
+            };
+
+            if (format === 'json') {
+                const jsonOutput = JSON.stringify(emptyResult, null, 2);
+                if (output) {
+                    saveToFile(jsonOutput, output);
+                } else {
+                    console.log(jsonOutput);
+                }
+            } else {
+                console.log('No staged changes found to review.');
+            }
+            process.exit(0);
+            return;
+        }
+
+        // Get chunks and review
+        const chunks = getDiffChunks(fullDiff);
+        const allIssues = [];
+        const CONCURRENCY_LIMIT = 3;
+
+        // Process chunks in parallel
+        for (let i = 0; i < chunks.length; i += CONCURRENCY_LIMIT) {
+            const currentBatch = chunks.slice(i, i + CONCURRENCY_LIMIT);
+            
+            try {
+                const batchResults = await Promise.all(currentBatch.map(chunk => reviewCode(chunk)));
+                
+                for (const aiResponse of batchResults) {
+                    const chunkIssues = parseAIResponse(aiResponse);
+                    allIssues.push(...chunkIssues);
+                }
+
+                // Small delay between batches
+                if (i + CONCURRENCY_LIMIT < chunks.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+            } catch (error) {
+                console.error(`Error during review: ${error.message}`);
+                process.exit(1);
+            }
+        }
+
+        // Also run team rules validation if available
+        const teamRules = loadTeamRules();
+        if (teamRules) {
+            const files = fullDiff.split(/^diff --git /m).filter(Boolean);
+            
+            for (const fileDiff of files) {
+                const pathMatch = fileDiff.match(/a\/(.*?) b\//);
+                if (!pathMatch) continue;
+                
+                const filePath = pathMatch[1];
+                
+                try {
+                    if (fs.existsSync(filePath)) {
+                        const fileContent = fs.readFileSync(filePath, 'utf-8');
+                        const violations = validateAgainstRules(fileDiff, fileContent, filePath);
+                        
+                        // Convert violations to issue format
+                        for (const violation of violations) {
+                            allIssues.push({
+                                file: violation.file,
+                                severity: violation.severity,
+                                issue: violation.message,
+                                suggestion: null,
+                                rule: violation.type
+                            });
+                        }
+                    }
+                } catch (error) {
+                    // Skip files that can't be read
+                    continue;
+                }
+            }
+        }
+
+        // Filter by severity if specified
+        let filteredIssues = severity ? filterBySeverity(allIssues, severity) : allIssues;
+
+        // Calculate duration
+        const duration = (Date.now() - startTime) / 1000;
+
+        // Get provider info
+        const { provider, model } = getActiveProvider();
+
+        // Prepare metadata
+        const metadata = {
+            timestamp: new Date().toISOString(),
+            duration,
+            provider,
+            model,
+            version: '1.0.16'
+        };
+
+        // Format output
+        let formattedOutput;
+        switch (format.toLowerCase()) {
+            case 'json':
+                formattedOutput = formatJSON(filteredIssues, metadata);
+                break;
+            case 'xml':
+                formattedOutput = formatXML(filteredIssues, metadata);
+                break;
+            case 'github':
+            case 'github-actions':
+                formattedOutput = formatGitHubActions(filteredIssues);
+                break;
+            case 'text':
+            default:
+                formattedOutput = formatText(filteredIssues, metadata);
+                break;
+        }
+
+        // Output to file or console
+        if (output) {
+            saveToFile(formattedOutput, output);
+            console.log(`Report saved to ${output}`);
+        } else {
+            console.log(formattedOutput);
+        }
+
+        // Determine exit code
+        const exitCode = getExitCode(filteredIssues, { failOnError, failOnWarn, severity });
+        process.exit(exitCode);
+
+    } catch (error) {
+        console.error(`Error during CI review: ${error.message}`);
+        process.exit(1);
     }
 }
 
@@ -124,19 +713,42 @@ ${pc.bold('Usage:')}
   aico <command> [options]
 
 ${pc.bold('Commands:')}
-  ${pc.cyan('review')}    Analyze staged changes and suggest improvements (default)
-  ${pc.cyan('commit')}    Generate and apply an AI-suggested commit message
-  ${pc.cyan('init')}      Setup AI providers and Git hooks
-  ${pc.cyan('help')}      Display this help message
+  ${pc.cyan('review')}           Analyze staged changes and suggest improvements (default)
+  ${pc.cyan('commit')}           Generate and apply an AI-suggested commit message
+  ${pc.cyan('ci')}               Run in CI/CD mode with machine-readable output
+  ${pc.cyan('security <subcommand>')} Security vulnerability scanning
+    ${pc.dim('scan')}            Full security scan (dependencies + code + config)
+    ${pc.dim('check')}           Check specific areas (--dependencies or --code)
+    ${pc.dim('report')}          Generate detailed security report
+  ${pc.cyan('init')}             Setup AI providers and Git hooks
+  ${pc.cyan('rules <subcommand>')} Manage team rules
+    ${pc.dim('init')}            Initialize team rules configuration
+    ${pc.dim('list')}            List all active rules
+    ${pc.dim('validate')}        Validate code against team rules
+  ${pc.cyan('help')}             Display this help message
 
 ${pc.bold('Options:')}
-  ${pc.cyan('--silent, -s')}    Run review without blocking the push
-  ${pc.cyan('--version, -v')}   Display version number
-  ${pc.cyan('--help, -h')}      Display this help message
+  ${pc.cyan('--silent, -s')}     Run review without blocking the push
+  ${pc.cyan('--format <type>')}  Output format: json, xml, github, text (CI mode)
+  ${pc.cyan('--output <file>')}  Save output to file (CI/CD and security modes)
+  ${pc.cyan('--fail-on-error')}  Exit with code 1 if errors found (CI mode)
+  ${pc.cyan('--fail-on-warn')}   Exit with code 1 if warnings found (CI mode)
+  ${pc.cyan('--severity <level>')} Filter by severity: error, warn, info (CI mode)
+  ${pc.cyan('--dependencies')}   Check dependencies only (security mode)
+  ${pc.cyan('--code')}           Check code only (security mode)
+  ${pc.cyan('--version, -v')}    Display version number
+  ${pc.cyan('--help, -h')}       Display this help message
 
 ${pc.bold('Examples:')}
   aico review --silent
   aico commit
+  aico ci --format json --output report.json
+  aico security scan
+  aico security check --dependencies
+  aico security report --output security-report.json
+  aico rules init
+  aico rules list
+  aico rules validate
     `);
 }
 
@@ -158,6 +770,23 @@ async function main() {
 
     if (command === 'init') {
         await init();
+        return;
+    }
+
+    if (command === 'rules') {
+        const subcommand = args[1];
+        await handleRulesCommand(subcommand);
+        return;
+    }
+
+    if (command === 'ci') {
+        await handleCICommand(args);
+        return;
+    }
+
+    if (command === 'security') {
+        const subcommand = args[1];
+        await handleSecurityCommand(subcommand, args);
         return;
     }
 

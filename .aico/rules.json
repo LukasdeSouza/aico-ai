@@ -1,0 +1,73 @@
+{
+  "version": "1.0",
+  "description": "Aico team rules configuration - Define your team's code quality standards",
+  "rules": {
+    "naming": {
+      "functions": "camelCase",
+      "classes": "PascalCase",
+      "constants": "UPPER_SNAKE_CASE",
+      "variables": "camelCase"
+    },
+    "complexity": {
+      "maxFunctionLength": 50,
+      "maxCyclomaticComplexity": 10,
+      "maxNestingDepth": 4,
+      "maxFileLength": 500
+    },
+    "forbidden": [
+      {
+        "pattern": "console\\.log",
+        "severity": "warn",
+        "message": "Remove console.log before committing. Use a proper logging library instead.",
+        "exclude": ["*.test.js", "*.spec.ts"]
+      },
+      {
+        "pattern": "debugger",
+        "severity": "error",
+        "message": "Remove debugger statement before committing"
+      },
+      {
+        "pattern": "TODO:|FIXME:",
+        "severity": "warn",
+        "message": "Unresolved TODO/FIXME found. Please create a ticket or resolve it."
+      }
+    ],
+    "required": [
+      {
+        "pattern": "^/\\*\\*[\\s\\S]*?\\*/\\s*(export\\s+)?(async\\s+)?function",
+        "severity": "warn",
+        "message": "Public functions should have JSDoc comments",
+        "filePattern": "*.js"
+      }
+    ],
+    "security": {
+      "noHardcodedSecrets": true,
+      "noEval": true,
+      "noInnerHTML": true,
+      "requireInputValidation": true
+    }
+  },
+  "ignore": [
+    "*.test.js",
+    "*.spec.ts",
+    "*.test.tsx",
+    "*.spec.jsx",
+    "dist/**",
+    "build/**",
+    "coverage/**",
+    "node_modules/**",
+    "*.min.js",
+    "*.bundle.js"
+  ],
+  "teamStandards": {
+    "requireErrorHandling": true,
+    "requireTypeAnnotations": false,
+    "preferConst": true,
+    "noVarKeyword": true,
+    "requireStrictMode": false
+  },
+  "aiPromptEnhancement": {
+    "enabled": true,
+    "customInstructions": "Focus on code maintainability, security, and performance. Follow our team's naming conventions and complexity limits."
+  }
+}
