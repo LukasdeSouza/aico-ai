@@ -1,6 +1,6 @@
 {
   "name": "aico-ai",
-  "version": "1.0.17",
+  "version": "1.1.0",
   "type": "module",
   "main": "index.js",
   "bin": {
@@ -10,24 +10,32 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "description": "AI-powered git gatekeeper for code reviews and commit message generation.",
+  "description": "AI-powered code quality platform with team rules, security scanning, and CI/CD integration. Your complete code gatekeeper.",
   "keywords": [
     "ai",
-    "git",
     "code-review",
-    "commit",
+    "security-scanner",
+    "vulnerability-scanner",
+    "team-rules",
+    "ci-cd",
+    "git-hooks",
+    "code-quality",
+    "static-analysis",
+    "commit-message",
     "groq",
+    "openai",
+    "deepseek",
+    "ollama",
+    "gemini",
     "cli",
     "developer-tools",
-    "chatgpt",
-    "gemini",
+    "devops",
     "security",
-    "team",
-    "project",
-    "github",
-    "artificial-intelligence"
+    "linter",
+    "code-standards",
+    "conventional-commits"
   ],
-  "author": "Lucas Silva from CodeTech Software <projetos@codetechsoftware.com.br>",
+  "author": "Lucas Silva from Codetech Software<projetos@codetechsoftware.com.br>",
   "license": "ISC",
   "repository": {
     "type": "git",

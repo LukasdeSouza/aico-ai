@@ -665,7 +665,7 @@ async function handleCICommand(args) {
             duration,
             provider,
             model,
-            version: '1.0.16'
+            version: '1.1.0'
         };
 
         // Format output
