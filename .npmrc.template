@@ -1,0 +1,24 @@
+# GitHub Packages Configuration Template
+# 
+# This file shows how to configure npm to authenticate with GitHub Packages.
+# DO NOT commit your actual .npmrc file with tokens to git!
+#
+# Instructions:
+# 1. Copy this file to .npmrc in your project root
+# 2. Replace TOKEN with your GitHub Personal Access Token
+# 3. The .npmrc file is already in .gitignore and won't be committed
+#
+# To create a GitHub Personal Access Token:
+# 1. Go to https://github.com/settings/tokens
+# 2. Click "Generate new token (classic)"
+# 3. Select scopes: read:packages, write:packages
+# 4. Copy the token and replace TOKEN below
+
+# GitHub Packages registry for @lukasddesouza scope
+@lukasddesouza:registry=https://npm.pkg.github.com
+
+# Authentication token (replace TOKEN with your actual token)
+//npm.pkg.github.com/:_authToken=TOKEN
+
+# Optional: Keep using npm registry for other packages
+registry=https://registry.npmjs.org/

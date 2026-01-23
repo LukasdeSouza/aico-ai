@@ -41,6 +41,10 @@
     "type": "git",
     "url": "git+https://github.com/LukasdeSouza/aico-ai.git"
   },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
   "bugs": {
     "url": "https://github.com/LukasdeSouza/aico-ai/issues"
   },

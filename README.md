@@ -52,20 +52,49 @@
 
 ## 📦 Installation
 
-### Global Installation (Recommended)
+Aico AI is available on both **npm** and **GitHub Packages**. Choose the option that works best for you:
+
+### Option 1: Install from npm (Recommended)
+
+**Global Installation:**
 ```bash
 npm install -g aico-ai
 ```
 
-### Project-Specific Installation
+**Project-Specific Installation:**
 ```bash
 npm install --save-dev aico-ai
 ```
+
+### Option 2: Install from GitHub Packages
+
+**Prerequisites:** You need a GitHub Personal Access Token with `read:packages` scope.
+
+1. **Configure npm to use GitHub Packages:**
+   ```bash
+   # Create .npmrc in your project or home directory
+   echo "@lukasddesouza:registry=https://npm.pkg.github.com" >> .npmrc
+   echo "//npm.pkg.github.com/:_authToken=YOUR_GITHUB_TOKEN" >> .npmrc
+   ```
+
+2. **Install the package:**
+   ```bash
+   # Global installation
+   npm install -g @lukasddesouza/aico-ai
+   
+   # Project installation
+   npm install --save-dev @lukasddesouza/aico-ai
+   ```
+
+📖 **For detailed GitHub Packages setup instructions, see [GITHUB_PACKAGES.md](./GITHUB_PACKAGES.md)**
 
 ### Verify Installation
 ```bash
 aico --version
 ```
+
+[![npm version](https://badge.fury.io/js/aico-ai.svg)](https://www.npmjs.com/package/aico-ai)
+[![GitHub Package](https://img.shields.io/badge/GitHub%20Packages-%40lukasddesouza%2Faico--ai-blue)](https://github.com/LukasdeSouza/aico-ai/packages)
 
 ---
 
