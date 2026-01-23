@@ -727,7 +727,7 @@ aico commit
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Whether it's:
 
@@ -745,7 +745,7 @@ We welcome contributions! Whether it's:
 
 ---
 
-## 📊 Supported AI Providers
+##  Supported AI Providers
 
 | Provider | Speed | Cost | Privacy | Best For |
 |----------|-------|------|---------|----------|
@@ -757,7 +757,7 @@ We welcome contributions! Whether it's:
 
 ---
 
-## 🔒 Security & Privacy
+##  Security & Privacy
 
 - **API Keys**: Stored locally in `~/.aicorc` (never committed)
 - **Code Privacy**: Only diffs are sent to AI providers
@@ -789,9 +789,71 @@ ISC License - see [LICENSE](LICENSE) file for details
 
 ---
 
+## ⭐ Show Your Support
+
+If you find Aico AI useful, please consider:
+
+- **⭐ Starring the repository** on [GitHub](https://github.com/LukasdeSouza/aico-ai) - It helps others discover the project!
+- **🐛 Reporting bugs** or **💡 suggesting features** via [GitHub Issues](https://github.com/LukasdeSouza/aico-ai/issues)
+- **📢 Sharing** with your team and developer community
+- **🤝 Contributing** - We're open source and welcome contributions!
+
 <div align="center">
 
-**⭐ Star us on GitHub if you find Aico useful!**
+### 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=LukasdeSouza/aico-ai&type=Date)](https://star-history.com/#LukasdeSouza/aico-ai&Date)
+
+</div>
+
+---
+
+## Contributing
+
+We welcome contributions! Whether it's:
+
+- 🐛 **Bug Reports**: Found an issue? Let us know!
+- 💡 **Feature Requests**: Have an idea? We'd love to hear it!
+- 📝 **Documentation**: Help improve our docs
+- 🔧 **Code Contributions**: Submit a pull request
+
+**Getting Started:**
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+**Development Setup:**
+```bash
+# Clone your fork
+git clone https://github.com/YOUR_USERNAME/aico-ai.git
+cd aico-ai
+
+# Install dependencies
+npm install
+
+# Test locally
+node index.js --help
+
+# Make your changes and test
+node index.js review
+```
+
+**Contribution Guidelines:**
+- Follow the existing code style
+- Write clear commit messages (we use [Conventional Commits](https://www.conventionalcommits.org/))
+- Add tests for new features
+- Update documentation as needed
+- Be respectful and constructive
+
+---
+
+<div align="center">
+
+**⭐ Star us on GitHub • 🤝 Contribute • 📢 Share**
+
+**Made with ❤️ by the open source community**
 
 [Report Bug](https://github.com/LukasdeSouza/aico-ai/issues) · [Request Feature](https://github.com/LukasdeSouza/aico-ai/issues) · [Documentation](./TEAM_RULES_GUIDE.md)
 
