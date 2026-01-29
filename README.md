@@ -749,6 +749,7 @@ aico commit
 
 ## Documentation
 
+-  **[Official Documentation](https://aico-ai.vercel.app)** - Visit our full documentation website
 -  **[Team Rules Guide](./TEAM_RULES_GUIDE.md)** - Complete guide to configuring team rules
 -  **[CI/CD Integration Guide](./CI_CD_INTEGRATION_GUIDE.md)** - Detailed CI/CD setup instructions
 -  **[Product Roadmap](./PRODUCT_ROADMAP.md)** - Upcoming features and priorities
@@ -816,6 +817,8 @@ ISC License - see [LICENSE](LICENSE) file for details
 - 🐛 Issues: [GitHub Issues](https://github.com/LukasdeSouza/aico-ai/issues)
 - 💬 Discussions: [GitHub Discussions](https://github.com/LukasdeSouza/aico-ai/discussions)
 
+<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="seekjobs" data-color="#40DCA5" data-emoji="🤖"  data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#ffffff" data-coffee-color="#FFDD00" ></script>
+
 ---
 
 ## ⭐ Show Your Support
@@ -826,6 +829,8 @@ If you find Aico AI useful, please consider:
 - **🐛 Reporting bugs** or **💡 suggesting features** via [GitHub Issues](https://github.com/LukasdeSouza/aico-ai/issues)
 - **📢 Sharing** with your team and developer community
 - **🤝 Contributing** - We're open source and welcome contributions!
+
+<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="seekjobs" data-color="#40DCA5" data-emoji="🤖"  data-font="Cookie" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#ffffff" data-coffee-color="#FFDD00" ></script>
 
 <div align="center">
 

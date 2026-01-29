@@ -48,7 +48,7 @@
   "bugs": {
     "url": "https://github.com/LukasdeSouza/aico-ai/issues"
   },
-  "homepage": "https://github.com/LukasdeSouza/aico-ai#readme",
+  "homepage": "https://aico-ai.vercel.app",
   "dependencies": {
     "dotenv": "^17.2.3",
     "enquirer": "^2.4.1",
