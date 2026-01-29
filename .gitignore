@@ -4,3 +4,5 @@ node_modules/
 PRODUCT_ROADMAP.md
 security-report.json
 *.security-report.json
+TODO.md
+GITHUB_PACKAGES.md
