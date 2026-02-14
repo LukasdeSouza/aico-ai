@@ -9,6 +9,7 @@
 - **Multi-Provider Support**: Groq, OpenAI, DeepSeek, Gemini, or local Ollama
 - **Auto-Fix Suggestions**: Apply AI-recommended fixes with one click
 - **Parallel Processing**: Fast reviews even for large diffs
+- **Code Explanation**: Get instant explanations for complex files
 
 ###  Team Rules Engine
 - **Custom Standards**: Define your team's code quality rules
@@ -174,6 +175,9 @@ aico review
 
 # Generate AI commit message
 aico commit
+
+# Generate Pull Request description
+aico pr
 
 # Run security scan
 aico security scan

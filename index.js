@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { getStagedDiff, applyFix, getDiffChunks } from './lib/git-utils.js';
-import { reviewCode, generateCommitMessage } from './lib/ai-service.js';
+import { reviewCode, generateCommitMessage, generatePRDescription, explainCode } from './lib/ai-service.js';
 import { parseAIResponse, displayIssues } from './lib/reviewer.js';
 import { 
     initializeTeamRules, 
@@ -715,7 +715,9 @@ ${pc.bold('Usage:')}
 ${pc.bold('Commands:')}
   ${pc.cyan('review')}           Analyze staged changes and suggest improvements (default)
   ${pc.cyan('commit')}           Generate and apply an AI-suggested commit message
+  ${pc.cyan('pr')}               Generate Pull Request description from diff
   ${pc.cyan('ci')}               Run in CI/CD mode with machine-readable output
+  ${pc.cyan('explain <file>')}   Explain a specific file
   ${pc.cyan('security <subcommand>')} Security vulnerability scanning
     ${pc.dim('scan')}            Full security scan (dependencies + code + config)
     ${pc.dim('check')}           Check specific areas (--dependencies or --code)
@@ -742,6 +744,8 @@ ${pc.bold('Options:')}
 ${pc.bold('Examples:')}
   aico review --silent
   aico commit
+  aico pr
+  aico explain src/utils.js
   aico ci --format json --output report.json
   aico security scan
   aico security check --dependencies
@@ -787,6 +791,73 @@ async function main() {
     if (command === 'security') {
         const subcommand = args[1];
         await handleSecurityCommand(subcommand, args);
+        return;
+    }
+
+    if (command === 'pr') {
+        try {
+            const currentBranch = execSync('git branch --show-current').toString().trim();
+            
+            // Try to detect base branch (main, master, or develop)
+            let baseBranch = 'main';
+            const branches = ['main', 'master', 'develop', 'dev'];
+            for (const branch of branches) {
+                try {
+                    execSync(`git rev-parse --verify origin/${branch}`, { stdio: 'ignore' });
+                    baseBranch = branch;
+                    break;
+                } catch (e) {
+                    continue;
+                }
+            }
+
+            console.log(pc.dim(`Comparing ${currentBranch} with origin/${baseBranch}...`));
+            const diff = execSync(`git diff origin/${baseBranch}...${currentBranch}`).toString();
+
+            if (!diff || diff.trim() === '') {
+                console.log(pc.yellow(`No differences found between ${currentBranch} and origin/${baseBranch}.`));
+                return;
+            }
+
+            startSpinner('Generating PR description...');
+            const description = await generatePRDescription(diff);
+            stopSpinner();
+
+            console.log(pc.bold('\n📝 Suggested PR Description:\n'));
+            console.log(description);
+        } catch (error) {
+            stopSpinner();
+            console.error(pc.red('Error generating PR description:'), error.message);
+            process.exit(1);
+        }
+        return;
+    }
+
+    if (command === 'explain') {
+        const filePath = args[1];
+        if (!filePath) {
+            console.error(pc.red('Please provide a file path: aico explain <file>'));
+            return;
+        }
+
+        if (!fs.existsSync(filePath)) {
+            console.error(pc.red(`File not found: ${filePath}`));
+            return;
+        }
+
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            startSpinner(`Analyzing ${filePath}...`);
+            const explanation = await explainCode(content, filePath);
+            stopSpinner();
+
+            console.log(pc.bold(`\n📘 Explanation for ${filePath}:\n`));
+            console.log(explanation);
+        } catch (error) {
+            stopSpinner();
+            console.error(pc.red('Error explaining file:'), error.message);
+            process.exit(1);
+        }
         return;
     }
 
