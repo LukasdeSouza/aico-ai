@@ -179,6 +179,9 @@ aico commit
 # Generate Pull Request description
 aico pr
 
+# Explain the code and commit that was generated
+aico explain
+
 # Run security scan
 aico security scan
 
